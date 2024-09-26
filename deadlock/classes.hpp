@@ -87,11 +87,16 @@ struct CModifierProperty : public source2sdk::server::CModifierProperty {
     void AddModifier(source2sdk::server::CBaseEntity *entity, source2sdk::server::CCitadelModifierVData *vdata, KeyValues3 *kv3);
 };
 
+struct CCitadelAbilityComponent : public source2sdk::server::CCitadelAbilityComponent {
+    CUtlVector<CHandle<deadlock::CBaseEntity>> *GetVecAbilities();
+};
+
 struct CCitadelPlayerPawn : public source2sdk::server::CCitadelPlayerPawn {
     void GiveCurrency(deadlock::ECurrencyType currency_type, int amount);
     void GiveItem(const char *item_name);
     void AddModifier(const char *name, float duration = 0.f);
     HeroID_t GetHeroID();
+    CCitadelAbilityComponent *GetAbilityComponent();
 };
 
 struct CCitadelPlayerController : public source2sdk::server::CCitadelPlayerController {

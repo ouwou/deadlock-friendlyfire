@@ -84,11 +84,6 @@ void *Hook_ExecuteTrace(void *a1, void *a2, void *posMaybe, CTraceFilter *filter
     return g_pfnExecuteTrace_Orig(a1, a2, posMaybe, filter, a5, a6, a7);
 }
 
-// string: C:\\buildworker\\citadel_rel_win64\\build\\src\\game\\shared\\citadel\\abilities\\tier_2_boss_abilities.cpp:
-// go to second one
-// call immediately before V_sincosf
-// also CCitadel_Ability_IceBeam vfunc 224 (212 "CCitadel_Ability_IceBeamVData" + 12) buried about half way down
-
 #pragma pack(1)
 struct TraceResult {
     int32_t nHits;
@@ -101,7 +96,6 @@ using TraceShapeFn = bool(__fastcall *)(void *pVPhys, Ray_t *ray, Vector *vStart
 TraceShapeFn g_pfnTraceShape_Orig = nullptr;
 bool Hook_TraceShape(void *pVPhys, Ray_t *ray, Vector *vStart, Vector *vEnd, CTraceFilter *filter, TraceResult *result) {
     if (!g_FriendlyFireEnabled) return g_pfnTraceShape_Orig(pVPhys, ray, vStart, vEnd, filter, result);
-
     /*
     switch (ray->m_eType) {
         case RayType_t::RAY_TYPE_CAPSULE:
@@ -134,6 +128,11 @@ bool Hook_TraceLineWithExcludedEntity(void *pVPhys, Vector *vStart, Vector *vEnd
 
     return g_pfnTraceLineWithExcludedEntity_Orig(pVPhys, vStart, vEnd, ent, interactsWith, collisionGroup, result);
 }
+
+// string: C:\\buildworker\\citadel_rel_win64\\build\\src\\game\\shared\\citadel\\abilities\\tier_2_boss_abilities.cpp:
+// go to second one
+// call immediately before V_sincosf
+// also CCitadel_Ability_IceBeam vfunc 224 (212 "CCitadel_Ability_IceBeamVData" + 12) buried about half way down
 
 using ExecuteRaySegmentTraceFn = bool(__fastcall *)(void *pVPhys, void *a2, Vector *vStart, Vector *vEnd, CTraceFilter *filter, void *a6);
 ExecuteRaySegmentTraceFn g_pfnExecuteRaySegmentTrace_Orig = nullptr;
@@ -291,6 +290,22 @@ void Hook_CCitadelModifierAura_Search(void *thisptr, CUtlVector<CHandle<deadlock
     }
 }
 
+using CCitadel_Ability_HoldMelee_unkAttackFn = void *(__fastcall *)(void *thisptr);
+CCitadel_Ability_HoldMelee_unkAttackFn g_pfnCCitadel_Ability_HoldMelee_unkAttack_Orig = nullptr;
+void *Hook_CCitadel_Ability_HoldMelee_unkAttack(deadlock::CBaseEntity *thisptr) {
+    if (!g_FriendlyFireEnabled) return g_pfnCCitadel_Ability_HoldMelee_unkAttack_Orig(thisptr);
+
+    auto *owner = thisptr->GetOwner();
+    int original_team_num = 0;
+    if (owner) {
+        original_team_num = owner->m_iTeamNum;
+        owner->m_iTeamNum = 4;
+    }
+    auto *r = g_pfnCCitadel_Ability_HoldMelee_unkAttack_Orig(thisptr);
+    if (owner) owner->m_iTeamNum = original_team_num;
+    return r;
+}
+
 CON_COMMAND(owo_friendlyfire, "Enable or disable friendly fire") {
     if (args.ArgC() < 2) {
         ConMsg("owo_friendlyfire = %d\n", g_FriendlyFireEnabled);
@@ -310,7 +325,22 @@ CON_COMMAND(owo_debug_print, "Enable or disable spammy debug print stuff") {
 
 CON_COMMAND_F(dbg_printme, "", FCVAR_GAMEDLL | FCVAR_CLIENT_CAN_EXECUTE) {
     auto *controller = (deadlock::CCitadelPlayerController *)GameEntitySystem()->GetEntityInstance(CEntityIndex(context.GetPlayerSlot().Get() + 1));
-    ConMsg("%llx %llx\n", controller, controller->GetPawn());
+    deadlock::CCitadelPlayerPawn *pawn = controller ? controller->GetPawn() : nullptr;
+    ConMsg("%llx %llx\n", controller, pawn);
+
+    if (pawn) {
+        auto *abilities = pawn->GetAbilityComponent()->GetVecAbilities();
+        for (int i = 0; i < abilities->Count(); i++) {
+            auto *ability = (*abilities)[i].Get();
+            if (ability) {
+                const char *classname = ability->AsInstance()->GetClassname();
+                Msg("%s\n", classname);
+                if (!strcmp(classname, "citadel_item")) {
+                    Msg("  - %s\n", ability->AsInstance()->m_pEntity->m_name.String());
+                }
+            }
+        }
+    }
 }
 
 CON_COMMAND(cvar_unhide, "") {
@@ -498,6 +528,16 @@ bool Connect(IAppSystem *pAppSystem, CreateInterfaceFn fnCreateInterface) {
 
         auto hook = funchook_create();
         funchook_prepare(hook, reinterpret_cast<void **>(&g_pfnCCitadelModifierAura_Search_Orig), &Hook_CCitadelModifierAura_Search);
+        funchook_install(hook, 0);
+    }
+
+    {
+        // callstack
+        static const auto CCitadel_Ability_HoldMelee_unkAttack = sigscan::scan(g_hServerModule, "\x48\x8B\xC4\x48\x89\x58\x00\x55\x56\x57\x41\x54\x41\x55\x41\x56\x41\x57\x48\x8D\xA8\x00\x00\x00\x00\x48\x81\xEC\xE0\x01\x00\x00\x0F\x29\x70\x00\x48\x8B\xF1\x0F\x29\x78\x00\xE8", "xxxxxx?xxxxxxxxxxxxxx????xxxxxxxxxx?xxxxxx?x");
+        g_pfnCCitadel_Ability_HoldMelee_unkAttack_Orig = reinterpret_cast<CCitadel_Ability_HoldMelee_unkAttackFn>(CCitadel_Ability_HoldMelee_unkAttack);
+
+        auto hook = funchook_create();
+        funchook_prepare(hook, reinterpret_cast<void **>(&g_pfnCCitadel_Ability_HoldMelee_unkAttack_Orig), &Hook_CCitadel_Ability_HoldMelee_unkAttack);
         funchook_install(hook, 0);
     }
 

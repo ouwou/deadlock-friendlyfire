@@ -1,6 +1,7 @@
 #include "classes.hpp"
 
 // maybe there is a better name for this
+// CNPCCreateAutoCompletionFunctor only vfunc -> 2nd subroutine sub_abc(3, v7)
 source2sdk::client::CEntitySubclassVDataBase *deadlock::GetVDataInstanceByName(EntitySubclassScope_t type, const char *name) {
     using GetVDataInstanceByNameFn = source2sdk::client::CEntitySubclassVDataBase *(__fastcall *)(EntitySubclassScope_t, const char *);
     static const auto GetVDataInstanceByNameAddr = sigscan::scan(g_hServerModule, "\x48\x89\x5C\x24\x00\x48\x89\x74\x24\x00\x57\x48\x83\xEC\x20\x48\x8B\xFA\x8B\xF1", "xxxx?xxxx?xxxxxxxxxx");
@@ -50,6 +51,10 @@ deadlock::HeroID_t deadlock::CCitadelPlayerPawn::GetHeroID() {
     return static_cast<HeroID_t>(m_CCitadelHeroComponent.m_nHeroID.m_Value);
 }
 
+deadlock::CCitadelAbilityComponent *deadlock::CCitadelPlayerPawn::GetAbilityComponent() {
+    return reinterpret_cast<deadlock::CCitadelAbilityComponent *>(&m_CCitadelAbilityComponent);
+}
+
 deadlock::CCitadelPlayerPawn *deadlock::CCitadelPlayerController::GetPawn() {
     auto handle = *reinterpret_cast<CHandle<CCitadelPlayerPawn> *>(m_hHeroPawn);
     return handle.Get();
@@ -71,4 +76,8 @@ deadlock::HeroID_t deadlock::CCitadelHeroManager::GetHeroIDFromName(const char *
     HeroID_t out;
     reinterpret_cast<GetHeroDataFromNameFn>(GetHeroDataFromNameAddr)(this, &out, hero_name);
     return out;
+}
+
+CUtlVector<CHandle<deadlock::CBaseEntity>> *deadlock::CCitadelAbilityComponent::GetVecAbilities() {
+    return reinterpret_cast<CUtlVector<CHandle<deadlock::CBaseEntity>> *>(m_vecAbilities);
 }
