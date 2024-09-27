@@ -17,7 +17,7 @@ SearchPaths
 }
 ```
 
-4. Copy or symlink `citadel/cfg` into `addons/foo/cfg` (unnecessary if running with -dedicated)
+4. Copy or symlink `citadel/cfg` into `addons/foo/cfg`
 5. Launch game and run `owo_friendlyfire 1` in game
 
 ### Known problems
