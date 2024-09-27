@@ -79,7 +79,17 @@ ExecuteTraceFn g_pfnExecuteTrace_Orig = nullptr;
 void *Hook_ExecuteTrace(void *a1, void *a2, void *posMaybe, CTraceFilter *filter, int a5, void *a6, char a7) {
     if (!g_FriendlyFireEnabled) return g_pfnExecuteTrace_Orig(a1, a2, posMaybe, filter, a5, a6, a7);
 
+    if (g_PrintStuff) {
+        Msg("IVPhys2World trace:\n");
+        Msg("  - InteractsExclude %llx\n", filter->m_nInteractsExclude);
+        Msg("  - InteractsWith %llx\n", filter->m_nInteractsWith);
+        Msg("  - InteractsAs %llx\n", filter->m_nInteractsAs);
+    }
+
     filter->m_nInteractsExclude &= ~(Citadel_Team_Amber | Citadel_Team_Sapphire);
+    if (filter->m_nInteractsWith & (Citadel_Team_Amber | Citadel_Team_Sapphire)) {
+        filter->m_nInteractsWith |= (Citadel_Team_Amber | Citadel_Team_Sapphire);
+    }
 
     return g_pfnExecuteTrace_Orig(a1, a2, posMaybe, filter, a5, a6, a7);
 }
@@ -196,12 +206,14 @@ int Hook_CCitadel_Ability_PowerSlash_Cast2(deadlock::CBaseEntity *thisptr, void 
     if (owner) {
         original_team_num = owner->m_iTeamNum;
         owner->m_iTeamNum = 4;
+        thisptr->m_iTeamNum = 4;
     }
 
     int r = g_pfnCCitadel_Ability_PowerSlash_Cast2_Orig(thisptr, a2);
 
     if (owner) {
         owner->m_iTeamNum = original_team_num;
+        thisptr->m_iTeamNum = original_team_num;
     }
 
     return r;
@@ -304,6 +316,22 @@ void *Hook_CCitadel_Ability_HoldMelee_unkAttack(deadlock::CBaseEntity *thisptr) 
     auto *r = g_pfnCCitadel_Ability_HoldMelee_unkAttack_Orig(thisptr);
     if (owner) owner->m_iTeamNum = original_team_num;
     return r;
+}
+
+using CCitadel_Ability_HoldMelee_unkTraceFn = bool (__fastcall*)(void* thisptr, int *a2, float a3);
+CCitadel_Ability_HoldMelee_unkTraceFn g_pfnCCitadel_Ability_HoldMelee_unkTrace_Orig = nullptr;
+bool Hook_CCitadel_Ability_HoldMelee_unkTrace(deadlock::CBaseEntity *thisptr, int *a2, float a3) {
+	if (!g_FriendlyFireEnabled) return g_pfnCCitadel_Ability_HoldMelee_unkTrace_Orig(thisptr, a2, a3);
+
+    auto *owner = thisptr->GetOwner();
+	int original_team_num = 0;
+	if (owner) {
+        original_team_num = owner->m_iTeamNum;
+        owner->m_iTeamNum = 4;
+    }
+    bool r = g_pfnCCitadel_Ability_HoldMelee_unkTrace_Orig(thisptr, a2, a3);
+	if (owner) owner->m_iTeamNum = original_team_num;
+	return r;
 }
 
 CON_COMMAND(owo_friendlyfire, "Enable or disable friendly fire") {
@@ -431,7 +459,7 @@ bool Connect(IAppSystem *pAppSystem, CreateInterfaceFn fnCreateInterface) {
     }
 
     {
-        static const auto Magic_Addr = sigscan::scan(g_hServerModule, "\x48\x8B\xC4\x4C\x89\x48\x00\x4C\x89\x40\x00\x48\x89\x50\x00\x89\x48", "xxxxxx?xxx?xxx?xx");
+        static const auto Magic_Addr = sigscan::scan(g_hServerModule, "\x48\x8B\xC4\x4C\x89\x48\x00\x4C\x89\x40\x00\x48\x89\x50\x00\x89\x48\x00\x55\x53", "xxxxxx?xxx?xxx?xx?xx");
         g_pfnMagic_Orig = reinterpret_cast<MagicFn>(Magic_Addr);
 
         auto hook = funchook_create();
@@ -449,7 +477,7 @@ bool Connect(IAppSystem *pAppSystem, CreateInterfaceFn fnCreateInterface) {
     }
 
     {
-        static const auto ExecuteRaySegmentTrace_Addr = sigscan::scan(g_hServerModule, "\x4C\x89\x44\x24\x00\x48\x89\x54\x24\x00\x55\x53\x57\x41\x54\x41\x55", "xxxx?xxxx?xxxxxxx");
+        static const auto ExecuteRaySegmentTrace_Addr = sigscan::scan(g_hServerModule, "\x4C\x89\x44\x24\x00\x48\x89\x54\x24\x00\x55\x53\x57\x41\x54\x41\x55\x41\x57", "xxxx?xxxx?xxxxxxxxx");
         g_pfnExecuteRaySegmentTrace_Orig = reinterpret_cast<ExecuteRaySegmentTraceFn>(ExecuteRaySegmentTrace_Addr);
 
         auto hook = funchook_create();
@@ -484,7 +512,7 @@ bool Connect(IAppSystem *pAppSystem, CreateInterfaceFn fnCreateInterface) {
         funchook_install(hook, 0);
     }
     {
-        static const auto CCitadel_Ability_Viscous_Telepunch_Impact_Addr = sigscan::scan(g_hServerModule, "\x48\x8B\xC4\x48\x89\x58\x00\x48\x89\x70\x00\x48\x89\x78\x00\x4C\x89\x70\x00\x55\x48\x8D\xA8\x00\x00\x00\x00\x48\x81\xEC\xB0\x01\x00\x00\x0F\x29\x70\x00\x48\x8D\x99", "xxxxxx?xxx?xxx?xxx?xxxx????xxxxxxxxxx?xxx");
+        static const auto CCitadel_Ability_Viscous_Telepunch_Impact_Addr = sigscan::scan(g_hServerModule, "\x48\x8B\xC4\x48\x89\x58\x00\x48\x89\x70\x00\x48\x89\x78\x00\x4C\x89\x70\x00\x55\x48\x8D\xA8\x00\x00\x00\x00\x48\x81\xEC\x00\x01\x00\x00\x0F\x29\x70\x00\x48\x8D\x99", "xxxxxx?xxx?xxx?xxx?xxxx????xxx?xxxxxx?xxx");
         g_pfnCCitadel_Ability_Viscous_Telepunch_Impact_Orig = reinterpret_cast<CCitadel_Ability_Viscous_Telepunch_ImpactFn>(CCitadel_Ability_Viscous_Telepunch_Impact_Addr);
 
         auto hook = funchook_create();
@@ -513,7 +541,7 @@ bool Connect(IAppSystem *pAppSystem, CreateInterfaceFn fnCreateInterface) {
     }
 
     {
-        static const auto CBaseEntity_TakeDamageOld_Addr = sigscan::scan(g_hServerModule, "\x48\x89\x74\x24\x00\x57\x48\x83\xEC\x70\x48\x8B\x41\x00\x48\x8B\xFA", "xxxx?xxxxxxxx?xxx");
+        static const auto CBaseEntity_TakeDamageOld_Addr = sigscan::scan(g_hServerModule, "\x48\x89\x74\x24\x00\x57\x48\x81\xEC\x80\x00\x00\x00\x48\x8B\x41", "xxxx?xxxxxxxxxxx");
         g_pfnCBaseEntity_TakeDamageOld_Orig = reinterpret_cast<CBaseEntity_TakeDamageOldFn>(CBaseEntity_TakeDamageOld_Addr);
 
         auto hook = funchook_create();
@@ -539,6 +567,16 @@ bool Connect(IAppSystem *pAppSystem, CreateInterfaceFn fnCreateInterface) {
         auto hook = funchook_create();
         funchook_prepare(hook, reinterpret_cast<void **>(&g_pfnCCitadel_Ability_HoldMelee_unkAttack_Orig), &Hook_CCitadel_Ability_HoldMelee_unkAttack);
         funchook_install(hook, 0);
+    }
+
+    {
+        // callstack
+        static const auto CCitadel_Ability_HoldMee_unkTrace = sigscan::scan(g_hServerModule, "\x40\x55\x41\x54\x41\x56\x41\x57\x48\x8D\xAC\x24", "xxxxxxxxxxxx");
+        g_pfnCCitadel_Ability_HoldMelee_unkTrace_Orig = reinterpret_cast<CCitadel_Ability_HoldMelee_unkTraceFn>(CCitadel_Ability_HoldMee_unkTrace);
+
+        auto hook = funchook_create();
+        funchook_prepare(hook, reinterpret_cast<void **>(&g_pfnCCitadel_Ability_HoldMelee_unkTrace_Orig), &Hook_CCitadel_Ability_HoldMelee_unkTrace);
+		funchook_install(hook, 0);
     }
 
     interfaces::g_pCvar->RegisterConCommand(&owo_friendlyfire_command);
